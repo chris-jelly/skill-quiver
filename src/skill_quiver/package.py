@@ -1,7 +1,5 @@
 """Skill packaging: create distributable zip archives."""
 
-from __future__ import annotations
-
 import zipfile
 from pathlib import Path
 

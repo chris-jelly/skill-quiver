@@ -1,7 +1,5 @@
 """Sync engine: fetch, diff, and update skills from upstream sources."""
 
-from __future__ import annotations
-
 import difflib
 import os
 import shutil

@@ -25,7 +25,15 @@ uv venv && uv pip install -e .
 
 ## Quick start
 
-1. Create a `skills.kdl` manifest in your project root:
+1. Initialize a skill-quiver project:
+
+```bash
+quiv init
+```
+
+This creates `skills.kdl`, `skills/`, and configures `.gitignore`.
+
+2. Edit `skills.kdl` to add your sources:
 
 ```kdl
 source {
@@ -39,7 +47,7 @@ source {
 }
 ```
 
-2. Fetch the skills:
+3. Fetch the skills:
 
 ```bash
 quiv sync fetch
@@ -48,7 +56,7 @@ quiv sync fetch
 This downloads the declared skills into `./skills/`, writes `.source.kdl` provenance
 files, and generates a `THIRD_PARTY_LICENSES` file.
 
-3. Validate your skills:
+4. Validate your skills:
 
 ```bash
 quiv validate
@@ -85,18 +93,20 @@ Checks skill directories for valid structure:
 
 Pass a skill name to validate a single skill, or omit to validate all.
 
-### `quiv init <SKILL>`
+### `quiv init`
 
-Scaffolds a new skill directory with:
-- `SKILL.md` with template frontmatter
-- `scripts/`, `references/`, `assets/` subdirectories
+Initializes a new skill-quiver project in the current directory:
+- `skills.kdl` with a commented example source block
+- `skills/` directory with `.gitkeep`
+- `.gitignore` entries for provenance tracking files
 
 ```bash
-quiv init my-new-skill
-# Creates skills/my-new-skill/
+quiv init
+# Creates skills.kdl, skills/, .gitignore
 ```
 
-Use `--output PATH` to create the skill at a custom location.
+Use `--dir PATH` to initialize in a different directory (creates it if needed).
+Errors if `skills.kdl` already exists.
 
 ### `quiv package <SKILL>`
 
@@ -176,7 +186,7 @@ src/skill_quiver/
   manifest.py       # skills.kdl parsing, Pydantic models
   sync.py           # Fetch, diff, update, license tracking
   validate.py       # SKILL.md and name validation
-  init.py           # Skill scaffolding
+  init.py           # Repository initialization
   package.py        # Zip packaging
   provenance.py     # .source.kdl read/write
   errors.py         # Exception hierarchy

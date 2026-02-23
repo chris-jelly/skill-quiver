@@ -1,7 +1,5 @@
 """Tests for the CLI framework."""
 
-from __future__ import annotations
-
 import subprocess
 import sys
 from pathlib import Path

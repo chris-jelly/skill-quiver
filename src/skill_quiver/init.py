@@ -1,75 +1,91 @@
-"""Skill scaffolding: create new skill directories with templates."""
-
-from __future__ import annotations
+"""Repository initialization: set up a new skill-quiver project."""
 
 from pathlib import Path
 
 from skill_quiver.errors import InitError
-from skill_quiver.validate import validate_name
 
-SKILL_MD_TEMPLATE = """\
----
-name: {name}
-description: TODO - describe what this skill does
-triggers: TODO - list trigger phrases
----
-
-# {name}
-
-TODO - write skill instructions here.
+SKILLS_KDL_TEMPLATE = """\
+// Add sources to fetch skills from.
+// Example:
+//
+// source {
+//     name "community-skills"
+//     repo "https://github.com/org/ai-skills"
+//     path "skills"
+//     ref "main"
+//     license "MIT"
+//     skill "code-reviewer"
+//     skill "readme-writer"
+// }
 """
 
-SUBDIRECTORIES = ["scripts", "references", "assets"]
+GITIGNORE_MARKER = "# quiv - provenance tracking files are machine-generated"
+GITIGNORE_ENTRIES = f"""\
+{GITIGNORE_MARKER}
+skills/**/.source.kdl
+"""
 
 
-def init_skill(
-    name: str,
-    output: Path | None = None,
-    root: Path | None = None,
-) -> Path:
-    """Scaffold a new skill directory.
+def _configure_gitignore(target: Path) -> bool:
+    """Create or append quiv entries to .gitignore.
+
+    Returns True if .gitignore was created or modified, False if entries
+    were already present.
+    """
+    gitignore = target / ".gitignore"
+
+    if gitignore.is_file():
+        existing = gitignore.read_text(encoding="utf-8")
+        if GITIGNORE_MARKER in existing:
+            return False
+        # Append with a leading newline if file doesn't end with one
+        separator = "" if existing.endswith("\n") else "\n"
+        gitignore.write_text(existing + separator + GITIGNORE_ENTRIES, encoding="utf-8")
+    else:
+        gitignore.write_text(GITIGNORE_ENTRIES, encoding="utf-8")
+
+    return True
+
+
+def init_repo(target: Path) -> Path:
+    """Initialize a skill-quiver project directory.
+
+    Creates skills.kdl, skills/ directory with .gitkeep, and configures
+    .gitignore with quiv-specific entries.
 
     Args:
-        name: Name for the new skill (must be valid kebab-case).
-        output: Custom output path. If None, uses skills/<name> under root.
-        root: Root directory (used when output is None).
+        target: Directory to initialize. Must exist.
 
     Returns:
-        Path to the created skill directory.
+        Path to the initialized directory.
 
     Raises:
-        InitError: If the name is invalid or directory already exists.
+        InitError: If skills.kdl already exists in the target directory.
     """
-    # Validate name
-    errors = validate_name(name)
-    if errors:
-        raise InitError(f"Invalid skill name: {'; '.join(errors)}")
+    manifest = target / "skills.kdl"
+    if manifest.is_file():
+        raise InitError("Already initialized (skills.kdl exists)")
 
-    # Resolve output path
-    if output is not None:
-        skill_dir = output / name
-    elif root is not None:
-        skill_dir = root / "skills" / name
-    else:
-        skill_dir = Path.cwd() / "skills" / name
+    # Create skills.kdl
+    manifest.write_text(SKILLS_KDL_TEMPLATE, encoding="utf-8")
 
-    # Check if directory already exists
-    if skill_dir.exists():
-        raise InitError(f"Directory already exists: {skill_dir}")
+    # Create skills/ directory with .gitkeep
+    skills_dir = target / "skills"
+    skills_dir.mkdir(exist_ok=True)
+    (skills_dir / ".gitkeep").touch()
 
-    # Create directory structure
-    skill_dir.mkdir(parents=True, exist_ok=False)
+    # Configure .gitignore
+    _configure_gitignore(target)
 
-    # Write template SKILL.md
-    skill_md = skill_dir / "SKILL.md"
-    skill_md.write_text(SKILL_MD_TEMPLATE.format(name=name), encoding="utf-8")
+    # Print summary
+    created = [
+        "skills.kdl",
+        "skills/",
+        "skills/.gitkeep",
+        ".gitignore",
+    ]
+    print(f"Initialized skill-quiver project at {target}")
+    for item in created:
+        print(f"  {item}")
 
-    # Create standard subdirectories with .gitkeep
-    for subdir_name in SUBDIRECTORIES:
-        subdir = skill_dir / subdir_name
-        subdir.mkdir()
-        gitkeep = subdir / ".gitkeep"
-        gitkeep.touch()
-
-    print(f"Created skill '{name}' at {skill_dir}")
-    return skill_dir
+    return target

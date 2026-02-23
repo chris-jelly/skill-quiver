@@ -1,7 +1,5 @@
 """Tests for the sync engine."""
 
-from __future__ import annotations
-
 import io
 import tarfile
 from datetime import datetime, timezone

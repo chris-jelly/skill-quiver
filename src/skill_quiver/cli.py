@@ -1,7 +1,5 @@
 """CLI entry point and argument parsing for quiv."""
 
-from __future__ import annotations
-
 import argparse
 import sys
 from pathlib import Path
@@ -103,19 +101,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     # --- init command ---
-    init_parser = subparsers.add_parser("init", help="Scaffold a new skill")
-    init_parser.add_argument(
-        "skill_name",
-        help="Name for the new skill (kebab-case)",
-        metavar="SKILL",
-    )
-    init_parser.add_argument(
-        "--output",
-        type=Path,
-        default=None,
-        help="Output directory (default: skills/<skill-name> under manifest root)",
-        metavar="PATH",
-    )
+    subparsers.add_parser("init", help="Initialize a skill-quiver project")
 
     # --- package command ---
     package_parser = subparsers.add_parser(
@@ -195,9 +181,14 @@ def _handle_validate(args: argparse.Namespace, work_dir: Path) -> None:
 
 def _handle_init(args: argparse.Namespace, work_dir: Path) -> None:
     """Dispatch init command."""
-    from skill_quiver.init import init_skill
+    from skill_quiver.init import init_repo
 
-    init_skill(name=args.skill_name, output=args.output, root=work_dir)
+    # Create --dir directory if it doesn't exist (init-only behavior)
+    if args.dir is not None and not Path(args.dir).is_dir():
+        Path(args.dir).mkdir(parents=True, exist_ok=True)
+        work_dir = Path(args.dir).resolve()
+
+    init_repo(target=work_dir)
 
 
 def _handle_package(args: argparse.Namespace, work_dir: Path) -> None:

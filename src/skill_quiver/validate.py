@@ -1,7 +1,5 @@
 """Skill validation: name format, SKILL.md frontmatter, directory structure."""
 
-from __future__ import annotations
-
 import re
 from pathlib import Path
 

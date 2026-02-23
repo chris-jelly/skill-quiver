@@ -1,7 +1,5 @@
 """Tests for skill packaging."""
 
-from __future__ import annotations
-
 import zipfile
 from pathlib import Path
 

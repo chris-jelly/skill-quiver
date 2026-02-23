@@ -1,50 +1,68 @@
-"""Tests for skill initialization."""
-
-from __future__ import annotations
+"""Tests for repository initialization."""
 
 from pathlib import Path
 
 import pytest
 
 from skill_quiver.errors import InitError
-from skill_quiver.init import init_skill
+from skill_quiver.init import GITIGNORE_MARKER, SKILLS_KDL_TEMPLATE, init_repo
 
 
-class TestInitSkill:
-    def test_successful_scaffold(self, tmp_path: Path) -> None:
-        result = init_skill("my-skill", root=tmp_path)
-        assert result.is_dir()
-        assert (result / "SKILL.md").is_file()
-        assert (result / "scripts").is_dir()
-        assert (result / "references").is_dir()
-        assert (result / "assets").is_dir()
-        assert (result / "scripts" / ".gitkeep").is_file()
-
-    def test_skill_md_content(self, tmp_path: Path) -> None:
-        result = init_skill("test-skill", root=tmp_path)
-        content = (result / "SKILL.md").read_text(encoding="utf-8")
-        assert "name: test-skill" in content
-        assert "description:" in content
-
-    def test_existing_directory_error(self, tmp_path: Path) -> None:
-        skill_dir = tmp_path / "skills" / "my-skill"
-        skill_dir.mkdir(parents=True)
-        with pytest.raises(InitError, match="already exists"):
-            init_skill("my-skill", root=tmp_path)
-
-    def test_invalid_name_rejection(self, tmp_path: Path) -> None:
-        with pytest.raises(InitError, match="Invalid skill name"):
-            init_skill("Invalid Name", root=tmp_path)
-
-    def test_custom_output_path(self, tmp_path: Path) -> None:
-        custom = tmp_path / "custom" / "output"
-        custom.mkdir(parents=True)
-        result = init_skill("my-skill", output=custom)
-        assert result == custom / "my-skill"
-        assert result.is_dir()
-
-    def test_parent_directory_creation(self, tmp_path: Path) -> None:
-        """Root skills/ dir doesn't exist yet -- should be created."""
-        result = init_skill("my-skill", root=tmp_path)
-        assert result.is_dir()
+class TestInitRepo:
+    def test_successful_repo_init(self, tmp_path: Path) -> None:
+        """Init creates skills.kdl, skills/, skills/.gitkeep, .gitignore."""
+        result = init_repo(tmp_path)
+        assert result == tmp_path
+        assert (tmp_path / "skills.kdl").is_file()
         assert (tmp_path / "skills").is_dir()
+        assert (tmp_path / "skills" / ".gitkeep").is_file()
+        assert (tmp_path / ".gitignore").is_file()
+
+    def test_skills_kdl_content(self, tmp_path: Path) -> None:
+        """skills.kdl matches the template with commented example."""
+        init_repo(tmp_path)
+        content = (tmp_path / "skills.kdl").read_text(encoding="utf-8")
+        assert content == SKILLS_KDL_TEMPLATE
+        assert "// source {" in content
+        assert 'name "community-skills"' in content
+
+    def test_already_initialized_error(self, tmp_path: Path) -> None:
+        """Raises InitError when skills.kdl already exists."""
+        (tmp_path / "skills.kdl").write_text("existing", encoding="utf-8")
+        with pytest.raises(InitError, match="Already initialized"):
+            init_repo(tmp_path)
+
+    def test_gitignore_created_when_none_exists(self, tmp_path: Path) -> None:
+        """.gitignore created with quiv entries when none exists."""
+        init_repo(tmp_path)
+        content = (tmp_path / ".gitignore").read_text(encoding="utf-8")
+        assert GITIGNORE_MARKER in content
+        assert "skills/**/.source.kdl" in content
+
+    def test_gitignore_appended_when_exists(self, tmp_path: Path) -> None:
+        """.gitignore is appended to, preserving existing content."""
+        existing_content = "node_modules/\n*.pyc\n"
+        (tmp_path / ".gitignore").write_text(existing_content, encoding="utf-8")
+        init_repo(tmp_path)
+        content = (tmp_path / ".gitignore").read_text(encoding="utf-8")
+        assert content.startswith("node_modules/\n*.pyc\n")
+        assert GITIGNORE_MARKER in content
+        assert "skills/**/.source.kdl" in content
+
+    def test_gitignore_not_duplicated(self, tmp_path: Path) -> None:
+        """.gitignore entries not duplicated if already present."""
+        existing_content = f"*.pyc\n{GITIGNORE_MARKER}\nskills/**/.source.kdl\n"
+        (tmp_path / ".gitignore").write_text(existing_content, encoding="utf-8")
+        init_repo(tmp_path)
+        content = (tmp_path / ".gitignore").read_text(encoding="utf-8")
+        assert content == existing_content
+
+    def test_dir_with_nonexistent_directory(self, tmp_path: Path) -> None:
+        """--dir creates non-existent directory and initializes inside."""
+        new_dir = tmp_path / "new-project"
+        assert not new_dir.exists()
+        new_dir.mkdir()
+        result = init_repo(new_dir)
+        assert result == new_dir
+        assert (new_dir / "skills.kdl").is_file()
+        assert (new_dir / "skills").is_dir()

@@ -1,7 +1,5 @@
 """KDL manifest parsing and Pydantic models for skills.kdl."""
 
-from __future__ import annotations
-
 import re
 from pathlib import Path
 

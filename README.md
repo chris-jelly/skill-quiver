@@ -34,10 +34,12 @@ declarative, with subdirectory extraction and provenance tracking built in.
 Requires Python >= 3.13.
 
 ```bash
-uv tool install skill-quiver
+git clone https://github.com/your-org/skill-quiver.git
+cd skill-quiver
+uv tool install .
 ```
 
-Or for development:
+### For development
 
 ```bash
 git clone https://github.com/your-org/skill-quiver.git

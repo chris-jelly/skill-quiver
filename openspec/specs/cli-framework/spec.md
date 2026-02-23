@@ -41,7 +41,7 @@ The system SHALL discover `skills.kdl` manifest files in the current working dir
 - **THEN** the system displays an error message suggesting to run `quiv init`
 
 ### Requirement: CLI provides command dispatch
-The system SHALL dispatch to appropriate command handlers based on the provided subcommand.
+The system SHALL dispatch to appropriate command handlers based on the provided subcommand. The available commands SHALL be `init` and `sync`.
 
 #### Scenario: Unknown command shows error
 - **WHEN** user runs `quiv unknowncommand`

@@ -19,7 +19,7 @@ from skill_quiver.sync import (
     _parse_github_repo,
     generate_license_file,
     resolve_sha,
-    sync_fetch,
+    sync,
 )
 
 
@@ -101,9 +101,9 @@ class TestResolveSha:
                 resolve_sha(client, source)
 
 
-class TestSyncFetch:
+class TestSync:
     @respx.mock
-    def test_fetch_happy_path(self, tmp_path: Path) -> None:
+    def test_sync_happy_path(self, tmp_path: Path) -> None:
         source = _make_source(path="skills")
         manifest = Manifest(sources=[source], root=tmp_path)
         sha = "abc123"
@@ -123,7 +123,7 @@ class TestSyncFetch:
             return_value=httpx.Response(200, content=tarball)
         )
 
-        sync_fetch(manifest)
+        sync(manifest)
 
         skill_dir = tmp_path / "skills" / "my-skill"
         assert skill_dir.is_dir()
@@ -154,10 +154,112 @@ class TestSyncFetch:
         )
 
         # Tarball should NOT be requested
-        sync_fetch(manifest)
+        sync(manifest)
 
         # Verify no tarball request was made
         assert len(respx.calls) == 1  # Only the SHA resolve call
+
+    @respx.mock
+    def test_overwrites_stale_skills(self, tmp_path: Path) -> None:
+        """Stale skills are deleted and re-extracted without warning."""
+        source = _make_source(path="skills")
+        manifest = Manifest(sources=[source], root=tmp_path)
+        old_sha = "old123"
+        new_sha = "new456"
+
+        # Pre-create skill with old provenance and a local edit
+        skill_dir = tmp_path / "skills" / "my-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("local edit", encoding="utf-8")
+        prov = Provenance(
+            repo="https://github.com/example/repo/",
+            path="skills",
+            ref="main",
+            sha=old_sha,
+            fetched=datetime.now(timezone.utc),
+        )
+        write_provenance(skill_dir, prov)
+
+        # Mock resolve SHA to new version
+        respx.get("https://api.github.com/repos/example/repo/commits/main").mock(
+            return_value=httpx.Response(200, json={"sha": new_sha})
+        )
+
+        # Mock tarball with upstream content
+        tarball = _make_tarball(
+            {
+                "skills/my-skill/SKILL.md": "---\nname: my-skill\n---\n# Upstream",
+            }
+        )
+        respx.get(f"https://api.github.com/repos/example/repo/tarball/{new_sha}").mock(
+            return_value=httpx.Response(200, content=tarball)
+        )
+
+        sync(manifest)
+
+        # Local edit should be overwritten
+        content = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+        assert "Upstream" in content
+        assert "local edit" not in content
+
+    @respx.mock
+    def test_dry_run_does_not_write(self, tmp_path: Path) -> None:
+        """Dry run reports changes but does not modify files."""
+        source = _make_source(path="skills")
+        manifest = Manifest(sources=[source], root=tmp_path)
+        sha = "abc123"
+
+        # Create skills dir so provenance reads work
+        skills_dir = tmp_path / "skills"
+        skills_dir.mkdir()
+
+        # Mock resolve SHA
+        respx.get("https://api.github.com/repos/example/repo/commits/main").mock(
+            return_value=httpx.Response(200, json={"sha": sha})
+        )
+
+        sync(manifest, dry_run=True)
+
+        # No skill directory should have been created
+        skill_dir = tmp_path / "skills" / "my-skill"
+        assert not skill_dir.exists()
+
+        # Only SHA resolve call, no tarball
+        assert len(respx.calls) == 1
+
+    @respx.mock
+    def test_dry_run_reports_stale(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Dry run reports which sources would be updated."""
+        source = _make_source(path="skills")
+        manifest = Manifest(sources=[source], root=tmp_path)
+        old_sha = "old12345"
+        new_sha = "new67890"
+
+        # Pre-create skill with old provenance
+        skill_dir = tmp_path / "skills" / "my-skill"
+        skill_dir.mkdir(parents=True)
+        prov = Provenance(
+            repo="https://github.com/example/repo/",
+            path="skills",
+            ref="main",
+            sha=old_sha,
+            fetched=datetime.now(timezone.utc),
+        )
+        write_provenance(skill_dir, prov)
+
+        # Mock resolve SHA to new version
+        respx.get("https://api.github.com/repos/example/repo/commits/main").mock(
+            return_value=httpx.Response(200, json={"sha": new_sha})
+        )
+
+        sync(manifest, dry_run=True)
+
+        captured = capsys.readouterr()
+        assert "old12345" in captured.out
+        assert "new67890" in captured.out
+        assert "1 skills" in captured.out
 
     @respx.mock
     def test_github_auth_header(self) -> None:

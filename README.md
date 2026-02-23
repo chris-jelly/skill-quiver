@@ -3,9 +3,9 @@
 CLI tool for managing curated collections of AI agent skills from git repositories.
 
 `quiv` reads a declarative `skills.kdl` manifest, fetches skills from upstream repos,
-tracks provenance, validates structure, and packages skills for distribution.
-It handles the curation side -- fetching and organizing skills.
-Agent-side installation is delegated to `npx skills`.
+and tracks provenance. It handles the curation side -- assembling skills from disparate
+sources into a single repo. Agent-side installation is delegated to
+[`npx skills`](https://github.com/vercel-labs/skills).
 
 ## Installation
 
@@ -47,51 +47,57 @@ source {
 }
 ```
 
-3. Fetch the skills:
+3. Sync the skills:
 
 ```bash
-quiv sync fetch
+quiv sync
 ```
 
 This downloads the declared skills into `./skills/`, writes `.source.kdl` provenance
 files, and generates a `THIRD_PARTY_LICENSES` file.
 
-4. Validate your skills:
+4. Install to your agents:
 
 ```bash
-quiv validate
+npx skills add ./
 ```
+
+## How it works
+
+```
+skills.kdl          quiv sync          skills/              npx skills add
+(manifest)    --->   (build)    --->   (output)     --->    (install)
+```
+
+You declare which skills you want from which repos in `skills.kdl`. `quiv sync` makes
+`skills/` match that declaration. The `skills/` directory is a build output -- `quiv`
+owns it completely. Commit it to your repo, and point `npx skills` at it to install
+to your agents.
 
 ## Commands
 
-### `quiv sync fetch`
+### `quiv sync`
 
-Downloads skills from all sources in the manifest. Skips sources already at the
-latest SHA. Uses the GitHub API tarball endpoint for GitHub repos, falls back to
-`git sparse-checkout` for other hosts.
+Resolves all sources in the manifest and makes `skills/` match. Incremental -- skips
+skills whose provenance SHA already matches upstream. Stale skills are deleted and
+re-extracted unconditionally.
 
 Set `GITHUB_TOKEN` in your environment to avoid API rate limits.
 
-### `quiv sync diff [--latest]`
+```bash
+quiv sync
+```
 
-Compares local skills against upstream. Shows added, removed, and changed files
-as unified diffs. Pass `--latest` to compare against the latest upstream commit
-regardless of the pinned SHA.
+### `quiv sync --dry-run`
 
-### `quiv sync update [SKILL] [--force]`
+Shows what would change without downloading or writing files. Resolves upstream SHAs
+and compares against local provenance.
 
-Updates local skills to match upstream. Detects local modifications and warns
-before overwriting. Use `--force` to skip the check. Pass a skill name to update
-a single skill.
-
-### `quiv validate [SKILL]`
-
-Checks skill directories for valid structure:
-- SKILL.md exists with valid YAML frontmatter (`name`, `description`)
-- Directory name matches the frontmatter `name` field
-- Names follow kebab-case format (lowercase alphanumeric, single hyphens, 1-64 chars)
-
-Pass a skill name to validate a single skill, or omit to validate all.
+```bash
+quiv sync --dry-run
+# community-skills: a1b2c3d -> f4e5d6a (2 skills)
+# bob-toolkit: up to date
+```
 
 ### `quiv init`
 
@@ -102,23 +108,10 @@ Initializes a new skill-quiver project in the current directory:
 
 ```bash
 quiv init
-# Creates skills.kdl, skills/, .gitignore
 ```
 
 Use `--dir PATH` to initialize in a different directory (creates it if needed).
 Errors if `skills.kdl` already exists.
-
-### `quiv package <SKILL>`
-
-Creates a zip archive of a skill directory. Validates the skill first, excludes
-hidden files (`.` prefix), and reports file count and archive size.
-
-```bash
-quiv package my-skill
-# Creates my-skill.zip in the current directory
-```
-
-Use `--output PATH` to write the archive elsewhere.
 
 ### Global flags
 
@@ -153,7 +146,7 @@ Each fetched skill gets a `.source.kdl` file tracking its origin:
 source repo="https://github.com/org/repo" path="skills" ref="main" sha="abc123..." fetched="2025-01-15T12:00:00+00:00"
 ```
 
-This file is used for skip-if-up-to-date detection on subsequent fetches and for
+This file is used for skip-if-up-to-date detection on subsequent syncs and for
 auditing where a skill came from.
 
 ## Development
@@ -184,10 +177,8 @@ src/skill_quiver/
   __init__.py       # Version
   cli.py            # argparse setup, command dispatch
   manifest.py       # skills.kdl parsing, Pydantic models
-  sync.py           # Fetch, diff, update, license tracking
-  validate.py       # SKILL.md and name validation
+  sync.py           # Sync engine, license tracking
   init.py           # Repository initialization
-  package.py        # Zip packaging
   provenance.py     # .source.kdl read/write
   errors.py         # Exception hierarchy
 ```

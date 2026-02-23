@@ -18,16 +18,5 @@ class SyncError(QuivError):
     """Error during sync operations (fetch, diff, update)."""
 
 
-class ValidationError(QuivError):
-    """Error during skill validation."""
-
-    def __init__(self, message: str, exit_code: int = 2) -> None:
-        super().__init__(message, exit_code)
-
-
-class PackageError(QuivError):
-    """Error during skill packaging."""
-
-
 class InitError(QuivError):
     """Error during skill initialization."""

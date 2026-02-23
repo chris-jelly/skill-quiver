@@ -1,6 +1,5 @@
-"""Sync engine: fetch, diff, and update skills from upstream sources."""
+"""Sync engine: resolve manifest and make skills/ match it."""
 
-import difflib
 import os
 import shutil
 import subprocess
@@ -243,44 +242,70 @@ def fetch_git_sparse(source: Source, dest: Path) -> list[Path]:
     return extracted_skills
 
 
-def sync_fetch(manifest: Manifest) -> None:
-    """Fetch all skills from manifest sources.
+def sync(manifest: Manifest, dry_run: bool = False) -> None:
+    """Resolve manifest and make skills/ match it.
+
+    For each source in the manifest, resolves the upstream SHA, compares
+    with local provenance, and re-extracts any stale skills. Treats
+    skills/ as a build output — stale skills are deleted and replaced
+    unconditionally.
 
     Args:
         manifest: Parsed manifest with sources.
+        dry_run: If True, report what would change without writing files.
     """
     skills_dir = manifest.root / "skills"
-    skills_dir.mkdir(exist_ok=True)
+
+    if not dry_run:
+        skills_dir.mkdir(exist_ok=True)
 
     with _make_client() as client:
         for source in manifest.sources:
-            print(f"Fetching source: {source.name}")
-
             if _is_github(source):
-                # Resolve SHA
                 sha = resolve_sha(client, source)
+            else:
+                sha = source.ref
 
-                # Check if up-to-date
-                all_up_to_date = True
-                for skill_name in source.skills:
-                    skill_dir = skills_dir / skill_name
-                    prov = read_provenance(skill_dir)
-                    if prov is None or prov.sha != sha:
-                        all_up_to_date = False
+            # Check which skills are stale
+            stale_skills: list[str] = []
+            for skill_name in source.skills:
+                skill_dir = skills_dir / skill_name
+                prov = read_provenance(skill_dir)
+                if prov is None or prov.sha != sha:
+                    stale_skills.append(skill_name)
+
+            if not stale_skills:
+                print(f"{source.name}: up to date")
+                continue
+
+            if dry_run:
+                # Report what would change
+                local_sha = "none"
+                for skill_name in stale_skills:
+                    prov = read_provenance(skills_dir / skill_name)
+                    if prov is not None:
+                        local_sha = prov.sha[:8]
                         break
+                print(
+                    f"{source.name}: {local_sha} -> {sha[:8]} "
+                    f"({len(stale_skills)} skills)"
+                )
+                continue
 
-                if all_up_to_date:
-                    print(f"  {source.name}: up to date (SHA {sha[:8]})")
-                    continue
+            # Delete stale skill directories before fetching
+            for skill_name in stale_skills:
+                skill_dir = skills_dir / skill_name
+                if skill_dir.exists():
+                    shutil.rmtree(skill_dir)
 
-                # Fetch tarball
+            # Fetch
+            print(f"Syncing {source.name}...")
+            if _is_github(source):
                 extracted = fetch_github_tarball(client, source, sha, skills_dir)
             else:
-                # Non-GitHub: use git sparse checkout
-                sha = source.ref  # Can't easily resolve SHA without GitHub API
                 extracted = fetch_git_sparse(source, skills_dir)
 
-            # Write provenance for each extracted skill
+            # Write provenance
             now = datetime.now(timezone.utc)
             for skill_dir in extracted:
                 prov = Provenance(
@@ -292,178 +317,9 @@ def sync_fetch(manifest: Manifest) -> None:
                     fetched=now,
                 )
                 write_provenance(skill_dir, prov)
-                print(f"  Fetched: {skill_dir.name}")
+                print(f"  {skill_dir.name}")
 
-        # Generate license file after all fetches
-        generate_license_file(manifest, manifest.root)
-
-
-def sync_diff(manifest: Manifest, latest: bool = False) -> None:
-    """Compare local skills against upstream versions.
-
-    Args:
-        manifest: Parsed manifest with sources.
-        latest: If True, compare against latest upstream regardless of pinned SHA.
-    """
-    skills_dir = manifest.root / "skills"
-    has_diff = False
-
-    with _make_client() as client:
-        for source in manifest.sources:
-            if not _is_github(source):
-                print(f"  {source.name}: diff not supported for non-GitHub sources")
-                continue
-
-            # Get upstream SHA
-            upstream_sha = resolve_sha(client, source)
-
-            for skill_name in source.skills:
-                skill_dir = skills_dir / skill_name
-                prov = read_provenance(skill_dir)
-
-                if prov is None:
-                    print(f"  {skill_name}: not yet fetched")
-                    has_diff = True
-                    continue
-
-                if not latest and prov.sha == upstream_sha:
-                    continue
-
-                # Fetch upstream to temp and diff
-                with tempfile.TemporaryDirectory() as tmp_dir:
-                    tmp = Path(tmp_dir)
-                    fetch_github_tarball(client, source, upstream_sha, tmp)
-
-                    upstream_skill = tmp / skill_name
-                    if not upstream_skill.is_dir():
-                        print(f"  {skill_name}: not found upstream")
-                        continue
-
-                    # Compare files
-                    _diff_directories(skill_dir, upstream_skill, skill_name)
-                    has_diff = True
-
-    if not has_diff:
-        print("All skills are up to date.")
-
-
-def _diff_directories(local: Path, upstream: Path, skill_name: str) -> None:
-    """Print unified diff between two directories."""
-    local_files = {
-        f.relative_to(local): f
-        for f in sorted(local.rglob("*"))
-        if f.is_file()
-        and not any(p.startswith(".") for p in f.relative_to(local).parts)
-    }
-    upstream_files = {
-        f.relative_to(upstream): f
-        for f in sorted(upstream.rglob("*"))
-        if f.is_file()
-        and not any(p.startswith(".") for p in f.relative_to(upstream).parts)
-    }
-
-    all_paths = sorted(set(local_files) | set(upstream_files))
-
-    for rel_path in all_paths:
-        local_file = local_files.get(rel_path)
-        upstream_file = upstream_files.get(rel_path)
-
-        if local_file and not upstream_file:
-            print(f"  {skill_name}/{rel_path}: removed upstream")
-        elif not local_file and upstream_file:
-            print(f"  {skill_name}/{rel_path}: added upstream")
-        elif local_file and upstream_file:
-            try:
-                local_lines = local_file.read_text(encoding="utf-8").splitlines(
-                    keepends=True
-                )
-                upstream_lines = upstream_file.read_text(encoding="utf-8").splitlines(
-                    keepends=True
-                )
-            except UnicodeDecodeError:
-                # Binary file
-                if local_file.read_bytes() != upstream_file.read_bytes():
-                    print(f"  {skill_name}/{rel_path}: binary files differ")
-                continue
-
-            diff = list(
-                difflib.unified_diff(
-                    local_lines,
-                    upstream_lines,
-                    fromfile=f"local/{skill_name}/{rel_path}",
-                    tofile=f"upstream/{skill_name}/{rel_path}",
-                )
-            )
-            if diff:
-                for line in diff:
-                    print(line, end="")
-                print()
-
-
-def sync_update(
-    manifest: Manifest,
-    skill_name: str | None = None,
-    force: bool = False,
-) -> None:
-    """Update local skills from upstream.
-
-    Args:
-        manifest: Parsed manifest with sources.
-        skill_name: Optional specific skill to update.
-        force: If True, overwrite local changes without warning.
-    """
-    skills_dir = manifest.root / "skills"
-
-    with _make_client() as client:
-        for source in manifest.sources:
-            # Filter to specific skill if requested
-            skills_to_update = source.skills
-            if skill_name:
-                if skill_name not in source.skills:
-                    continue
-                skills_to_update = [skill_name]
-
-            if _is_github(source):
-                sha = resolve_sha(client, source)
-            else:
-                sha = source.ref
-
-            for sname in skills_to_update:
-                skill_dir = skills_dir / sname
-                prov = read_provenance(skill_dir)
-
-                if prov and prov.sha == sha:
-                    print(f"  {sname}: already up to date")
-                    continue
-
-                # Check for local modifications
-                if not force and skill_dir.is_dir() and prov:
-                    print(f"  {sname}: has local state, use --force to overwrite")
-                    continue
-
-                # Fetch and replace
-                print(f"  Updating: {sname}")
-                if _is_github(source):
-                    if skill_dir.exists():
-                        shutil.rmtree(skill_dir)
-                    fetch_github_tarball(client, source, sha, skills_dir)
-                else:
-                    fetch_git_sparse(source, skills_dir)
-
-                # Write provenance
-                now = datetime.now(timezone.utc)
-                new_prov = Provenance(
-                    repo=str(source.repo),
-                    path=source.path,
-                    ref=source.ref,
-                    sha=sha,
-                    license=source.license,
-                    fetched=now,
-                )
-                write_provenance(skill_dir, new_prov)
-                print(f"  Updated: {sname}")
-
-        # Regenerate license file
+    if not dry_run:
         generate_license_file(manifest, manifest.root)
 
 

@@ -56,69 +56,18 @@ def _build_parser() -> argparse.ArgumentParser:
 
     subparsers = parser.add_subparsers(dest="command", title="commands")
 
-    # --- sync command group ---
-    sync_parser = subparsers.add_parser("sync", help="Sync skills from upstream")
-    sync_sub = sync_parser.add_subparsers(dest="sync_command", title="sync commands")
-
-    # sync fetch
-    sync_sub.add_parser("fetch", help="Fetch skills from upstream sources")
-
-    # sync diff
-    diff_parser = sync_sub.add_parser("diff", help="Show differences with upstream")
-    diff_parser.add_argument(
-        "--latest",
+    # --- sync command ---
+    sync_parser = subparsers.add_parser(
+        "sync", help="Resolve manifest and sync skills from upstream"
+    )
+    sync_parser.add_argument(
+        "--dry-run",
         action="store_true",
-        help="Compare against latest upstream regardless of pinned SHA",
-    )
-
-    # sync update
-    update_parser = sync_sub.add_parser(
-        "update", help="Update local skills from upstream"
-    )
-    update_parser.add_argument(
-        "skill_name",
-        nargs="?",
-        default=None,
-        help="Specific skill to update (default: all)",
-        metavar="SKILL",
-    )
-    update_parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Overwrite local changes without warning",
-    )
-
-    # --- validate command ---
-    validate_parser = subparsers.add_parser(
-        "validate", help="Validate skill structure and naming"
-    )
-    validate_parser.add_argument(
-        "skill_name",
-        nargs="?",
-        default=None,
-        help="Specific skill to validate (default: all)",
-        metavar="SKILL",
+        help="Show what would change without writing files",
     )
 
     # --- init command ---
     subparsers.add_parser("init", help="Initialize a skill-quiver project")
-
-    # --- package command ---
-    package_parser = subparsers.add_parser(
-        "package", help="Package a skill as a zip archive"
-    )
-    package_parser.add_argument(
-        "skill_name",
-        help="Skill to package",
-        metavar="SKILL",
-    )
-    package_parser.add_argument(
-        "--output",
-        type=Path,
-        default=None,
-        help="Output path for zip file (default: <skill-name>.zip)",
-        metavar="PATH",
-    )
 
     return parser
 
@@ -134,49 +83,13 @@ def _resolve_dir(args: argparse.Namespace) -> Path:
 
 
 def _handle_sync(args: argparse.Namespace, work_dir: Path) -> None:
-    """Dispatch sync subcommands."""
+    """Dispatch sync command."""
     from skill_quiver.manifest import parse_manifest
-    from skill_quiver.sync import sync_diff, sync_fetch, sync_update
-
-    if not args.sync_command:
-        raise QuivError("No sync subcommand provided. Use: fetch, diff, or update")
+    from skill_quiver.sync import sync
 
     manifest_path = find_manifest(work_dir)
     manifest = parse_manifest(manifest_path)
-
-    match args.sync_command:
-        case "fetch":
-            sync_fetch(manifest)
-        case "diff":
-            sync_diff(manifest, latest=args.latest)
-        case "update":
-            sync_update(
-                manifest,
-                skill_name=args.skill_name,
-                force=args.force,
-            )
-
-
-def _handle_validate(args: argparse.Namespace, work_dir: Path) -> None:
-    """Dispatch validate command."""
-    from skill_quiver.validate import validate_all
-
-    manifest_path = find_manifest(work_dir)
-    root = manifest_path.parent
-    results = validate_all(root, skill_name=args.skill_name)
-
-    has_errors = False
-    for skill_name, errors in sorted(results.items()):
-        if errors:
-            has_errors = True
-            print(f"{skill_name}:", file=sys.stderr)
-            for error in errors:
-                print(f"  - {error}", file=sys.stderr)
-        else:
-            print(f"{skill_name}: ok")
-
-    if has_errors:
-        raise QuivError("Validation failed", exit_code=2)
+    sync(manifest, dry_run=args.dry_run)
 
 
 def _handle_init(args: argparse.Namespace, work_dir: Path) -> None:
@@ -189,16 +102,6 @@ def _handle_init(args: argparse.Namespace, work_dir: Path) -> None:
         work_dir = Path(args.dir).resolve()
 
     init_repo(target=work_dir)
-
-
-def _handle_package(args: argparse.Namespace, work_dir: Path) -> None:
-    """Dispatch package command."""
-    from skill_quiver.package import package_skill
-
-    manifest_path = find_manifest(work_dir)
-    root = manifest_path.parent
-    skill_dir = root / "skills" / args.skill_name
-    package_skill(skill_dir=skill_dir, output=args.output)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -216,12 +119,8 @@ def main(argv: list[str] | None = None) -> None:
         match args.command:
             case "sync":
                 _handle_sync(args, work_dir)
-            case "validate":
-                _handle_validate(args, work_dir)
             case "init":
                 _handle_init(args, work_dir)
-            case "package":
-                _handle_package(args, work_dir)
 
     except QuivError as e:
         print(f"error: {e.message}", file=sys.stderr)

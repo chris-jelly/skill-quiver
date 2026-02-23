@@ -39,14 +39,23 @@ class TestHelp:
         assert exc_info.value.code == 0
         captured = capsys.readouterr()
         assert "sync" in captured.out
-        assert "validate" in captured.out
         assert "init" in captured.out
-        assert "package" in captured.out
+
+    def test_help_does_not_list_removed_commands(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        with pytest.raises(SystemExit):
+            main(["--help"])
+        captured = capsys.readouterr()
+        assert "validate" not in captured.out
+        assert "package" not in captured.out
 
     def test_sync_help(self, capsys: pytest.CaptureFixture[str]) -> None:
         with pytest.raises(SystemExit) as exc_info:
             main(["sync", "--help"])
         assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        assert "--dry-run" in captured.out
 
 
 class TestDirFlag:
@@ -54,11 +63,11 @@ class TestDirFlag:
         """--dir with a valid directory should not error on its own."""
         # Will fail because no manifest, but should not fail on dir check
         with pytest.raises(SystemExit):
-            main(["--dir", str(tmp_path), "validate"])
+            main(["--dir", str(tmp_path), "sync"])
 
     def test_invalid_dir(self, capsys: pytest.CaptureFixture[str]) -> None:
         with pytest.raises(SystemExit) as exc_info:
-            main(["--dir", "/nonexistent/path", "validate"])
+            main(["--dir", "/nonexistent/path", "sync"])
         assert exc_info.value.code != 0
 
 

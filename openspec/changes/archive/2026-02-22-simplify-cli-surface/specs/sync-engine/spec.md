@@ -1,4 +1,4 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: Sync fetch downloads from GitHub API
 The system SHALL download skill sources from GitHub repositories using the GitHub API tarball endpoint when `quiv sync` is run.
@@ -61,3 +61,17 @@ The system SHALL support a `--dry-run` flag that resolves upstream SHAs and repo
 #### Scenario: Dry-run does not write files
 - **WHEN** user runs `quiv sync --dry-run`
 - **THEN** no files in `skills/` are created, modified, or deleted
+
+## REMOVED Requirements
+
+### Requirement: Sync diff compares local vs upstream
+**Reason**: File-level diff is removed. Since `skills/` is a git-tracked build output, `git diff` after `quiv sync` provides strictly better output (syntax highlighting, paging). The `--dry-run` flag replaces the "what's changed?" use case at the SHA level.
+**Migration**: Use `quiv sync --dry-run` to check for upstream changes, then `quiv sync && git diff` for file-level details.
+
+### Requirement: Sync update applies upstream changes
+**Reason**: The separate `update` command is removed. `quiv sync` now performs the full resolve-and-apply operation in a single step. Local edit protection (`--force`) is removed because `skills/` is a build output.
+**Migration**: Replace `quiv sync update` with `quiv sync`. Replace `quiv sync update --force` with `quiv sync` (force is now the only behavior).
+
+### Requirement: Sync fetch supports source filtering
+**Reason**: Per-skill targeting via `filter` is removed. `quiv sync` always processes all sources and all skills declared in the manifest. The operation is incremental (skips up-to-date skills) so the cost is low.
+**Migration**: Remove `filter` usage. To exclude skills, remove them from `skills.kdl`.

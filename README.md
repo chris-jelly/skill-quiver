@@ -3,9 +3,31 @@
 CLI tool for managing curated collections of AI agent skills from git repositories.
 
 `quiv` reads a declarative `skills.kdl` manifest, fetches skills from upstream repos,
-and tracks provenance. It handles the curation side -- assembling skills from disparate
-sources into a single repo. Agent-side installation is delegated to
-[`npx skills`](https://github.com/vercel-labs/skills).
+and tracks provenance. It handles the curation side: assembling skills from disparate
+sources into a single repo. Agent-side installation is left to your preferred tool or
+workflow.
+
+## Why skill-quiver?
+
+AI agent skills live in git repos scattered across GitHub. Tools like
+[`npx skills`](https://github.com/vercel-labs/skills) make it easy to install a
+single skill, but they're imperative. There's no way to declare "these are the
+skills I want" and reproduce that set on a fresh machine.
+
+`quiv` fills that gap. It's the declarative curation layer:
+
+- **Reproducible**: Your `skills.kdl` manifest captures your entire skill set
+  in one file. Commit it alongside the synced `skills/` directory to track how
+  your skills change over time.
+- **Attribution-preserving**: Skills are other people's work. `quiv` tracks
+  where every skill came from (`.source.kdl`) and generates a
+  `THIRD_PARTY_LICENSES` file automatically.
+- **Composable**: `quiv` handles curation and provenance. Installation to agent
+  directories is a separate step, handled by whatever tool or process you prefer
+  (e.g., `npx skills`).
+
+Think of it as git submodules done right, scoped specifically to AI skills:
+declarative, with subdirectory extraction and provenance tracking built in.
 
 ## Installation
 
@@ -56,7 +78,8 @@ quiv sync
 This downloads the declared skills into `./skills/`, writes `.source.kdl` provenance
 files, and generates a `THIRD_PARTY_LICENSES` file.
 
-4. Install to your agents:
+4. Install to your agents using your preferred tool or process. For example,
+   with [`npx skills`](https://github.com/vercel-labs/skills):
 
 ```bash
 npx skills add ./
@@ -65,20 +88,20 @@ npx skills add ./
 ## How it works
 
 ```
-skills.kdl          quiv sync          skills/              npx skills add
-(manifest)    --->   (build)    --->   (output)     --->    (install)
+skills.kdl          quiv sync          skills/              install
+(manifest)    --->   (build)    --->   (output)     --->    (your tool)
 ```
 
 You declare which skills you want from which repos in `skills.kdl`. `quiv sync` makes
-`skills/` match that declaration. The `skills/` directory is a build output -- `quiv`
-owns it completely. Commit it to your repo, and point `npx skills` at it to install
-to your agents.
+`skills/` match that declaration. The `skills/` directory is a build output that `quiv`
+owns completely. Commit it to your repo and use whatever tool you like to install
+skills to your agents.
 
 ## Commands
 
 ### `quiv sync`
 
-Resolves all sources in the manifest and makes `skills/` match. Incremental -- skips
+Resolves all sources in the manifest and makes `skills/` match. Sync is incremental and skips
 skills whose provenance SHA already matches upstream. Stale skills are deleted and
 re-extracted unconditionally.
 
@@ -115,8 +138,8 @@ Errors if `skills.kdl` already exists.
 
 ### Global flags
 
-- `--dir DIR` -- operate in a different directory instead of CWD
-- `--version` -- print version and exit
+- `--dir DIR`: operate in a different directory instead of CWD
+- `--version`: print version and exit
 
 ## Manifest format
 
@@ -185,4 +208,4 @@ src/skill_quiver/
 
 ## License
 
-MIT -- see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).

@@ -287,6 +287,28 @@ class TestGenerateLicenseFile:
         assert "beta-source" in content
         # Alphabetical ordering
         assert content.index("alpha-source") < content.index("beta-source")
+        # Skills section appears for each source
+        assert "Skills:" in content
+        assert "  - my-skill" in content
+
+    def test_multiple_skills_alphabetical(self, tmp_path: Path) -> None:
+        """Skills are listed as indented bullets in alphabetical order."""
+        source = _make_source(
+            name="multi-skill-source",
+            license="MIT",
+            skills=["zebra-skill", "alpha-skill", "mango-skill"],
+        )
+        manifest = Manifest(sources=[source], root=tmp_path)
+
+        generate_license_file(manifest, tmp_path)
+
+        content = (tmp_path / "THIRD_PARTY_LICENSES").read_text(encoding="utf-8")
+        assert "  - alpha-skill" in content
+        assert "  - mango-skill" in content
+        assert "  - zebra-skill" in content
+        # Alphabetical order
+        assert content.index("alpha-skill") < content.index("mango-skill")
+        assert content.index("mango-skill") < content.index("zebra-skill")
 
     def test_missing_license(self, tmp_path: Path) -> None:
         sources = [_make_source(name="no-license", license=None)]

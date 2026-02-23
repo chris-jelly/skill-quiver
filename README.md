@@ -1,4 +1,9 @@
-# skill-quiver
+# skill-quiver (Archived)
+
+> **This project is archived.** The problem it solves — declarative skill
+> curation — is being addressed upstream in
+> [`npx skills`](https://github.com/vercel-labs/skills). See
+> [Why archived?](#why-archived) below.
 
 CLI tool for managing curated collections of AI agent skills from git repositories.
 
@@ -7,14 +12,50 @@ and tracks provenance. It handles the curation side: assembling skills from disp
 sources into a single repo. Agent-side installation is left to your preferred tool or
 workflow.
 
-## Why skill-quiver?
+## Why archived?
+
+`skill-quiver` was built to fill a specific gap: `npx skills` is imperative — you
+run `add` commands one at a time, and there's no single file that declares "these
+are the skills I want." There's no way to reproduce your skill set on a fresh machine
+without re-running every command from memory.
+
+`quiv` solved this with a declarative `skills.kdl` manifest, per-skill provenance
+tracking, and incremental sync. It worked, but it also meant vendoring copies of
+upstream skills into your repo — a pattern that carries its own costs (duplication,
+staleness, repo bloat).
+
+After building the tool, two upstream issues emerged that cover this use case
+directly within `npx skills`:
+
+- [**#165**: Package manager-style workflow with `skills.json` manifest and
+  content-addressable cache](https://github.com/vercel-labs/skills/issues/165)
+  — proposes a full declarative manifest (`skills.json`), integrity hashing,
+  a shared content-addressable cache, and `skills install` to sync from the
+  manifest. This is essentially `skill-quiver`'s vision, built natively into
+  the tool with 6.7k stars and a growing contributor base.
+
+- [**#283**: `skills install` / `skills sync` command to install skills from
+  lock file](https://github.com/vercel-labs/skills/issues/283) — proposes
+  restoring skills from the existing lock file, enabling reproducible setups
+  across machines via dotfile sync.
+
+Between these two issues, every core capability of `skill-quiver` is covered —
+and #165 goes further with features like content-addressable caching and direct
+agent symlinking that `quiv` never attempted.
+
+Rather than maintain a separate tool that duplicates work the ecosystem is
+converging on, this project is archived. The code remains available as a
+reference for anyone interested in the design decisions (KDL manifests,
+per-skill provenance, incremental SHA-based sync).
+
+## What skill-quiver was
 
 AI agent skills live in git repos scattered across GitHub. Tools like
 [`npx skills`](https://github.com/vercel-labs/skills) make it easy to install a
 single skill, but they're imperative. There's no way to declare "these are the
 skills I want" and reproduce that set on a fresh machine.
 
-`quiv` fills that gap. It's the declarative curation layer:
+`quiv` filled that gap. It was the declarative curation layer:
 
 - **Reproducible**: Your `skills.kdl` manifest captures your entire skill set
   in one file. Commit it alongside the synced `skills/` directory to track how

@@ -19,39 +19,11 @@ SKILLS_KDL_TEMPLATE = """\
 // }
 """
 
-GITIGNORE_MARKER = "# quiv - provenance tracking files are machine-generated"
-GITIGNORE_ENTRIES = f"""\
-{GITIGNORE_MARKER}
-skills/**/.source.kdl
-"""
-
-
-def _configure_gitignore(target: Path) -> bool:
-    """Create or append quiv entries to .gitignore.
-
-    Returns True if .gitignore was created or modified, False if entries
-    were already present.
-    """
-    gitignore = target / ".gitignore"
-
-    if gitignore.is_file():
-        existing = gitignore.read_text(encoding="utf-8")
-        if GITIGNORE_MARKER in existing:
-            return False
-        # Append with a leading newline if file doesn't end with one
-        separator = "" if existing.endswith("\n") else "\n"
-        gitignore.write_text(existing + separator + GITIGNORE_ENTRIES, encoding="utf-8")
-    else:
-        gitignore.write_text(GITIGNORE_ENTRIES, encoding="utf-8")
-
-    return True
-
 
 def init_repo(target: Path) -> Path:
     """Initialize a skill-quiver project directory.
 
-    Creates skills.kdl, skills/ directory with .gitkeep, and configures
-    .gitignore with quiv-specific entries.
+    Creates skills.kdl and skills/ directory with .gitkeep.
 
     Args:
         target: Directory to initialize. Must exist.
@@ -74,15 +46,11 @@ def init_repo(target: Path) -> Path:
     skills_dir.mkdir(exist_ok=True)
     (skills_dir / ".gitkeep").touch()
 
-    # Configure .gitignore
-    _configure_gitignore(target)
-
     # Print summary
     created = [
         "skills.kdl",
         "skills/",
         "skills/.gitkeep",
-        ".gitignore",
     ]
     print(f"Initialized skill-quiver project at {target}")
     for item in created:

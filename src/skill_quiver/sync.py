@@ -350,6 +350,9 @@ def generate_license_file(manifest: Manifest, root: Path) -> None:
             section_lines.append("License: Not specified")
         if source.attribution:
             section_lines.append(f"Attribution: {source.attribution}")
+        section_lines.append("Skills:")
+        for skill_name in sorted(source.skills):
+            section_lines.append(f"  - {skill_name}")
         sections.append("\n".join(section_lines))
 
     content = "# Third-Party Licenses\n\n" + "\n\n".join(sections) + "\n"

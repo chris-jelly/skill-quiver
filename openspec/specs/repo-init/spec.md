@@ -18,21 +18,6 @@ The system SHALL create a `skills/` directory with a `.gitkeep` file when initia
 - **WHEN** user runs `quiv init`
 - **THEN** a `skills/` directory is created with a `.gitkeep` file inside it
 
-### Requirement: System configures gitignore
-The system SHALL create or append to `.gitignore` with quiv-specific entries for provenance tracking files.
-
-#### Scenario: Gitignore created when none exists
-- **WHEN** user runs `quiv init` and no `.gitignore` exists
-- **THEN** a `.gitignore` file is created containing the quiv provenance entry `skills/**/.source.kdl`
-
-#### Scenario: Gitignore appended when it already exists
-- **WHEN** user runs `quiv init` and a `.gitignore` already exists
-- **THEN** the quiv entries are appended to the existing `.gitignore`
-
-#### Scenario: Gitignore not duplicated
-- **WHEN** user runs `quiv init` and `.gitignore` already contains the quiv entries
-- **THEN** the system SHALL NOT add duplicate entries
-
 ### Requirement: System rejects already-initialized directory
 The system SHALL error when `skills.kdl` already exists in the target directory.
 
